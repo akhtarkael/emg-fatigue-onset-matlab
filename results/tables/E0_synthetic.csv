@@ -1,0 +1,5 @@
+feature,trueOnset_s,medianDetected_s,medianAbsError_s,passRate_12s,falsePositiveRate
+rms,40,45,5,0.98,0.01
+mav,40,45,5,1,0.02
+mdf,40,40,0,1,0.01
+mnf,40,39,1,1,0.02

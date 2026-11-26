@@ -4,17 +4,13 @@
 
 > Give the tool a multi-channel surface EMG recording of a sustained muscle effort. It cleans the signal, extracts spectral and time-domain fatigue indicators in sliding windows, and reports which indicator reveals the onset of fatigue earliest and most consistently, with every claim backed by a number and a figure produced by the code in this repository.
 
-<!-- Replace with a real image once available -->
-![Hero: raw vs filtered EMG, and the median-frequency shift from early to late in the recording](docs/media/hero.png)
+![Hero: raw vs filtered EMG and the median-frequency shift from early to late in the recording](docs/media/hero.png)
 
-- Demo video / write-up: `[TODO: link]`
-- Team: Akhtar Kael, Jennifer Jestina
-- Institution: Universitas Brawijaya, Malang, Indonesia
-- MATLAB release: R2026b
-- Required products: MATLAB, Signal Processing Toolbox, Statistics and Machine Learning Toolbox
-- Optional products: Wavelet Toolbox (wavelet feature)
-
-> **Note for coding agents:** read Section 10 (Implementation Plan and Agent Rules) completely before writing any code. Sections 4, 7 and 9 are the specification. Section 8 is filled only from files produced by the code.
+- Demo video / write-up: not supplied in the brief.
+- Team: Akhtar Kael, Jennifer Jestina.
+- Institution: Universitas Brawijaya, Malang, Indonesia.
+- MATLAB release: R2026b Update 1 (`26.2.0.3433840`), from `results/run_info.json`.
+- Products used here: base MATLAB plus the MATLAB unit-testing framework. The brief listed Signal Processing Toolbox and Statistics and Machine Learning Toolbox, and optional Wavelet Toolbox; none of the three is installed on this machine, so documented base-MATLAB substitutes are used. See `results/run_info.json` and `docs/formulation.md`.
 
 ---
 
@@ -29,7 +25,7 @@
 7. [Experiments](#7-experiments)
 8. [Key Results](#8-key-results)
 9. [Repository Structure and Data Contracts](#9-repository-structure-and-data-contracts)
-10. [Implementation Plan and Agent Rules](#10-implementation-plan-and-agent-rules)
+10. [Implementation Record](#10-implementation-record)
 11. [Getting Started](#11-getting-started)
 12. [Limitations and Future Work](#12-limitations-and-future-work)
 13. [Team](#13-team)
@@ -39,455 +35,400 @@
 
 ## 1. Problem Statement
 
-Muscle fatigue is a decline in a muscle's ability to produce force. It matters in sport, rehabilitation, and workplace ergonomics, where detecting it early can prevent injury. Surface electromyography (sEMG) is a non-invasive way to observe it, because the electrical activity of the muscle changes as it tires. Classic findings are that the signal's frequency content shifts toward lower frequencies and its amplitude tends to rise. Many indicators have been proposed, and a practitioner must choose one. Two problems follow:
+Muscle fatigue is a decline in the ability to produce force. Surface electromyography (sEMG) observes it non-invasively: during sustained effort, the spectrum tends to shift toward lower frequencies and the amplitude tends to rise. Many indicators exist, so a practitioner must choose one.
 
-1. **Which indicator to trust.** Spectral indicators (median and mean frequency) and time-domain indicators (RMS, mean absolute value) are all used, but they differ in how consistently and how early they respond. The choice is often made by habit rather than by comparison on the same data.
-2. **A workflow that is hard to repeat.** Raw sEMG is noisy, quantized, and recorded with varying hardware settings. Without a clean, scripted pipeline, results are difficult to reproduce or compare.
+Two problems follow:
 
-**Goal:** build a reproducible MATLAB pipeline that
+1. **Which indicator to trust.** Median frequency (MDF), mean frequency (MNF), RMS and mean absolute value (MAV) are all used, but they differ in consistency and timing. The choice is often habitual rather than comparative.
+2. **A workflow that is hard to repeat.** Raw sEMG is noisy, quantized and recorded with varying hardware settings. Without a scripted pipeline, results are hard to reproduce.
 
-- loads a public multi-channel sEMG fatigue dataset and checks its quality,
-- filters the signals and extracts spectral and time-domain features in sliding windows,
-- quantifies how strongly and how early each feature responds to fatigue using explicit, stated criteria,
-- validates the whole method on synthetic signals with a known fatigue onset, and
-- reports the ranking of features, whether it agrees with the classic hypotheses, and where it does not.
+This repository builds a reproducible MATLAB pipeline that loads a public multi-channel sEMG fatigue dataset, checks quality, filters and windows the signals, extracts four fatigue indicators, quantifies how strongly and how early each responds, validates the detector on synthetic signals with known onset, and reports where the classic hypotheses hold and where they do not.
 
 ## 2. Contribution and Positioning
 
-We do not claim a new fatigue index or new signal processing theory. Median and mean frequency as fatigue indicators are classical. Our contribution is a transparent, reproducible comparison implemented in MATLAB:
+This is not a new fatigue index or new signal-processing theory. The contribution is a transparent, reproducible comparison:
 
-1. **A complete scripted pipeline** from raw recording to ranked indicators, built on Signal Processing Toolbox functions, with open code.
-2. **An explicit definition of "onset".** We compare features with the same detection criteria (a z-score criterion, a fixed percentage criterion, and a change-point criterion) so that features with different natural variability are treated fairly.
-3. **Validation on synthetic signals with known onset**, so that the detection method is tested before it is trusted on real data.
-4. **A robustness study** showing whether the ranking of features changes with window length, overlap, and filter band.
-5. **Honest reporting.** The classic hypotheses are tested, not assumed. Results that contradict them are reported.
+1. A complete scripted pipeline from raw recording to ranked indicators, with open code and one configuration struct.
+2. An explicit definition of "onset": three stated criteria applied identically to every feature, with non-detections kept distinct from late detections.
+3. Validation on synthetic signals with a known onset before trusting the detector on real data.
+4. A robustness study over window length, overlap, filter band and baseline fraction.
+5. Honest reporting: hypotheses are tested, and the classic spectral-dominance expectation is not supported here.
 
-### Prior work we build on
-
-| | Classic sEMG fatigue literature | MathWorks example: arm motions with EMG and deep learning | **This work** |
+| | Classic sEMG fatigue literature | MathWorks EMG + deep-learning example | This work |
 |---|---|---|---|
-| Goal | Characterize spectral and amplitude changes with fatigue | Classify forearm motions | Compare features for fatigue onset detection |
-| Method | Median/mean frequency, RMS, other indices | CNN sequence-to-sequence classification | Classical features, change detection, statistics |
-| Dataset | Varies by study | Carleton myoelectric dataset (motions, 3 s each) | Public multi-channel sEMG fatigue dataset (Section 4.1) |
-| Output | Trends, indices | Accuracy, confusion chart | Feature ranking, onset times, robustness analysis |
-| Interpretability | High | Lower (neural network) | High (physically meaningful features) |
+| Goal | Characterize spectral and amplitude changes | Classify forearm motions | Compare features for fatigue onset detection |
+| Method | MDF/MNF, RMS and related indices | CNN sequence-to-sequence classification | Classical features, change detection, exploratory statistics |
+| Dataset | Varies by study | Carleton myoelectric dataset, short motions | Public 8-channel fatigue dataset |
+| Output | Trends and indices | Accuracy and confusion chart | Feature ranking, onset times, robustness, data-quality report |
+| Interpretability | High | Lower | High |
 
-The comparison reflects what the sources describe and is not a systematic review. `[TODO before submission: add 2 to 3 recent papers on sEMG fatigue detection to docs/literature.md and position this work against them.]`
+Short notes on three recent papers and how they relate to this work are in [`docs/literature.md`](docs/literature.md).
 
 ## 3. Research Questions and Hypotheses
 
-**Primary question (RQ1).** Among median frequency (MDF), mean frequency (MNF), RMS, and mean absolute value (MAV), which feature shows fatigue-related change most consistently and earliest in a sustained effort?
+**RQ1.** Among MDF, MNF, RMS and MAV, which feature shows fatigue-related change most consistently and earliest in a sustained effort?
 
-**Secondary questions.**
+**RQ2.** Does the ranking depend on window length, overlap and filter band (also checked for baseline fraction)?
 
-- **RQ2.** Does the ranking of features depend on analysis choices (window length, overlap, filter band)?
-- **RQ3.** Are the effects consistent across the 8 recorded channels and across subjects?
-- **RQ4 (optional).** Can the decline of MDF be summarized by a single fatigue time constant per subject?
+**RQ3.** Are the effects consistent across the eight channels and across subjects?
 
-**Hypotheses (from the classic literature, to be tested).**
+**RQ4 (optional).** Can the MDF decline be summarized by one fatigue time constant per subject?
 
 | ID | Hypothesis | Expected direction |
 |---|---|---|
 | H1 | MDF and MNF decrease over the recording | Down |
 | H2 | RMS and MAV increase over the recording | Up |
-| H3 | Spectral features respond more consistently (higher effect size) and earlier than amplitude features | MDF/MNF rank above RMS/MAV |
+| H3 | Spectral features respond more consistently and earlier than amplitude features | MDF/MNF rank above RMS/MAV |
 
-These may be wrong for this dataset (low sampling rate, 8-bit resolution, one task type). The results section states whether each hypothesis is supported, partly supported, or not supported.
+These hypotheses may fail for this dataset because of its low sampling rate, 8-bit resolution, already-applied notch filter, and one task type. Section 8 states the outcome from generated tables.
 
 ## 4. Solution Approach
 
 ### 4.1 Dataset
 
-**Primary dataset:** *Multi-channel Surface EMG Dataset for Fatigue analysis* (Ebied, Awadallah, Abbass, El-Sharkawy; Zenodo, 2021). DOI: `10.5281/zenodo.5189275`. Licence: CC BY 4.0. Associated paper: DOI `10.1109/NILES50944.2020.9257909`.
+Primary dataset: Ebied et al., *Multi-channel Surface EMG Dataset for Fatigue analysis*, Zenodo, DOI `10.5281/zenodo.5189275`, CC BY 4.0. Associated paper: DOI `10.1109/NILES50944.2020.9257909`. The downloaded archive MD5 matched the value in the brief. The actual file layout, quality checks and the limited electrode information are documented in [`docs/dataset.md`](docs/dataset.md).
 
-As described on the dataset page:
+Important consequences:
 
-| Property | Value |
-|---|---|
-| Subjects | 15 healthy |
-| Channels | 8 sEMG channels |
-| Task | 6 kg load held with the elbow flexed at 90 degrees |
-| Duration | 120 s per subject |
-| Sampling rate | 200 Hz |
-| Resolution | 8 bit |
-| Pre-processing already applied | 50 Hz notch filter |
-| Format | One txt file per subject, or one .mat file with all subjects |
-| Size | 10.6 MB (zip) |
-| File | `Dataset EMG Fatigue.zip`, md5 `a954b4eff5594fd8b1670b1a1d0eb864` |
+- Sampling is 200 Hz, so the Nyquist limit is 100 Hz. The default band is 20–90 Hz, not the wider band common in higher-rate sEMG.
+- A 50 Hz notch was already applied by the dataset authors; no second notch is applied by default.
+- There is no fatigue label, force trace or self-reported score. "Onset" is defined by our criteria, not supplied by the data.
+- The paper places channel 4 over the pronator teres and says numbering was consistent across subjects. It does not enumerate all eight muscles in extractable text, so channels remain numbered channels.
 
-Direct download: `https://zenodo.org/records/5189275/files/Dataset%20EMG%20Fatigue.zip?download=1`
-
-**Consequences of these properties for the method** (these drive several design choices below):
-
-- **Sampling rate is 200 Hz**, so the usable band ends below 100 Hz (Nyquist). The common 20 to 450 Hz sEMG band cannot be used. We use 20 to 90 Hz.
-- **A 50 Hz notch is already applied**, so we do not apply another one by default. It leaves a dip near 50 Hz in every spectrum. This biases absolute MDF/MNF values slightly but affects early and late windows alike, so normalized trends are much less affected.
-- **8-bit resolution** means coarse amplitude quantization. We check the number of distinct amplitude levels per channel in the quality check.
-- **There is no ground-truth fatigue label.** Onset is defined by the method (Section 4.5), not given by the data. We do not assume that subjects reached exhaustion within 120 s.
-- **The mapping from channel to muscle is not stated on the dataset page.** `[TODO: read the NILES 2020 paper and fill the channel-to-muscle mapping in docs/dataset.md.]` Until then, channels are treated as numbered channels and are not assigned to muscles.
-- **The exact file layout is not documented on the page** (orientation of the matrix, variable names, units). The loader must inspect the files and document what it finds (Section 10, Task 1).
-
-**Optional second dataset (only if time remains):** Lim et al., *Assessment of Self-report, Palpation, and Surface Electromyography Dataset During Isometric Muscle Contraction*, Scientific Data, 2024 (DOI `10.1038/s41597-024-03030-8`), 30 male subjects, nine upper body muscles, isometric contraction. Its sampling rate, file format, and labels must be checked before use. This would allow a check on whether conclusions hold on a higher-bandwidth recording.
-
-### 4.2 Pipeline overview
+### 4.2 Pipeline
 
 ```
 Raw sEMG (8 ch, 200 Hz)
-   -> Stage 0: load + quality check
-   -> Stage 1: preprocessing (DC removal, band-pass 20-90 Hz, optional notch)
-   -> Stage 2: sliding-window segmentation (2 s, 50% overlap)
-   -> Stage 3: feature extraction per window and channel (RMS, MAV, MDF, MNF, optional wavelet ratio)
-   -> Stage 4: baseline normalization + causal smoothing
-   -> Stage 5: sensitivity metrics + onset detection + feature ranking
-   -> Stage 6 (bonus): MDF decay time constant, early-vs-late classification
-   -> Validation: synthetic signals with known onset (Experiment E0)
+  -> Stage 0: load + quality check                 (E1)
+  -> Stage 1: DC removal via band-pass, 20-90 Hz   (base-MATLAB Butterworth)
+  -> Stage 2: 2 s windows, 50% overlap
+  -> Stage 3: RMS, MAV, MDF, MNF per window/channel
+  -> Stage 4: baseline normalization + causal smoothing
+  -> Stage 5: sensitivity metrics, onset, ranking   (E3, E4)
+  -> Validation: synthetic known-onset signals      (E0)
+  -> Sensitivity: trends, robustness, channels      (E2, E5, E6)
+  -> Bonus: exponential MDF time constant            (E7)
 ```
 
-### 4.3 Stage 1 and 2: preprocessing and segmentation
+Exact formulas, including the base-MATLAB substitutes and the documented O3 deviation, are in [`docs/formulation.md`](docs/formulation.md).
 
-1. Remove the mean of each channel (DC offset).
-2. Zero-phase Butterworth band-pass, default 20 to 90 Hz, order 4 (`butter` with `filtfilt`, which doubles the effective magnitude order). Configurable. The notch is off by default (`cfg.applyNotch = false`) because the dataset is already notch-filtered. If switched on, use `iirnotch`.
-3. Segment each channel into windows of `winSec = 2` s (400 samples) with `overlap = 0.5`. Window times are recorded as the window center in seconds.
+### 4.3 Preprocessing and features
 
-Window overlap makes neighbouring windows correlated. Statistics computed across windows are therefore descriptive and p-values over windows are not valid. Inference is done across subjects, never across windows.
+The 4th-order Butterworth band-pass is designed with an analogue prototype and bilinear transform, then applied forward and backward with `filter` for zero phase. No Signal Processing Toolbox functions are used.
 
-### 4.4 Stage 3: features
+For every window and channel:
 
-Features are computed for every window and channel. Expected direction under fatigue is the classic one (Section 3).
-
-| Feature | Definition | Domain | Expected |
-|---|---|---|---|
-| `rms` | `sqrt(mean(x.^2))` | Time | Up |
-| `mav` | `mean(abs(x))` | Time | Up |
-| `mdf` | Median frequency of the power spectrum within `specBand` | Frequency | Down |
-| `mnf` | Mean frequency of the power spectrum within `specBand` | Frequency | Down |
-| `wlr` (optional) | Wavelet energy ratio: energy in low-frequency levels divided by energy in high-frequency levels, from `modwt` | Time-frequency | Up |
-
-Spectrum estimation: Welch estimate per window with `pwelch(x, hamming(200), 100, 512, fs)` (1 s sub-windows with 50% overlap, which reduces the variance of the estimate compared with a single periodogram). Then `medfreq(pxx, f, specBand)` and `meanfreq(pxx, f, specBand)`, with `specBand = [20 90]`. `[TODO for agent: confirm in the MATLAB documentation for the installed release that medfreq and meanfreq accept (pxx, f, rangeofinterest); if not, compute MDF and MNF directly from pxx with cumulative trapezoidal integration.]`
-
-For `wlr` at 200 Hz, `modwt` detail levels cover approximately: D1 50 to 100 Hz, D2 25 to 50 Hz, D3 12.5 to 25 Hz, D4 6 to 12 Hz. The agent must state in `docs/formulation.md` which levels are used for "low" and "high" given the band-pass. Because the data are band-passed to 20 to 90 Hz, the default choice is low = D2 (25 to 50 Hz) and high = D1 (50 to 100 Hz). This feature is optional and is dropped if the Wavelet Toolbox is not available.
-
-### 4.5 Stage 4 and 5: normalization, onset, and sensitivity metrics
-
-**Normalization.** For each subject, channel, and feature, divide by the mean of the baseline windows (the first `baselineFrac = 0.10` of the recording). A normalized value of 1 means "same as baseline".
-
-**Smoothing.** A causal (trailing) moving mean over `smoothWin = 5` windows, so that the smoothed value at time `t` uses only windows up to `t`. This is stated explicitly because it adds a lag to detected onsets.
-
-**Sign convention.** Let `s = +1` for features expected to rise and `s = -1` for features expected to fall. All metrics below are sign-adjusted so that a positive value means "changed in the expected fatigue direction".
-
-**Sensitivity metrics** (computed per subject, channel, and feature):
-
-| ID | Metric | What it measures |
+| Feature | Definition | Expected direction |
 |---|---|---|
-| M1 | Spearman correlation between the feature and time, multiplied by `s` | Consistency of the trend |
-| M2 | Normalized slope: linear-fit slope of the normalized feature in percent of baseline per minute, multiplied by `s` | Speed of change |
-| M3 | Cohen's d between the first `earlyLateFrac = 0.20` and the last 20% of windows, multiplied by `s` | Size of the change relative to natural variability |
-| M4 | Onset time (below) | How early the change is detectable |
+| `rms` | `sqrt(mean(x.^2))` | Up |
+| `mav` | `mean(abs(x))` | Up |
+| `mdf` | Median frequency of the Welch PSD in 20–90 Hz | Down |
+| `mnf` | Mean frequency of the Welch PSD in 20–90 Hz | Down |
 
-**Onset detection** (three criteria, reported separately):
+The Welch PSD uses analytic Hamming windows of 200 samples with 100 samples of overlap and a 512-point FFT. MDF and MNF are computed with cumulative and ordinary trapezoidal integration. The optional `wlr` is skipped because Wavelet Toolbox is not installed.
 
-- **O1 (primary), z-score criterion.** Onset is the time of the first window in the first run of `k = 3` consecutive smoothed windows where `s * (y - baselineMean) / baselineStd >= zThresh`, with `zThresh = 3`. If there is no such run, onset is `NaN` (not detected). This treats features fairly even though RMS is naturally noisier than MDF in relative terms.
-- **O2, fixed percentage criterion.** Same logic, but the condition is `s * (y - 1) >= 0.10` on the normalized feature. Easy to explain, but not variability-adjusted.
-- **O3, change-point criterion.** `findchangepts` on the normalized (unsmoothed) feature with `Statistic = "linear"` and `MaxNumChanges = 1`. The reported time is the change-point location.
+### 4.4 Normalization, metrics and onset
 
-Also report the **detection rate** (fraction of subject-channel pairs with a detected onset) per feature and criterion. A feature that rarely crosses its threshold is not "late", it is "not detected", and the two must not be mixed in averages.
+Each feature is divided by the mean of the first 10% of that subject/channel's windows, producing a baseline value of 1, then smoothed with a trailing 5-window mean. This introduces about a 2-window lag in O1 and O2.
 
-**Aggregation across subjects.** Per feature: median and interquartile range of M1 to M3 over subjects (after taking the median across channels within a subject, and also reported per channel). Paired comparison between features across subjects with the Wilcoxon signed-rank test (`signrank`) and Holm correction. A Friedman test (`friedman`) is used as an omnibus check on M3. With 15 subjects, all tests are exploratory and effect sizes are emphasized over p-values.
+Expected signs are +1 for RMS/MAV and −1 for MDF/MNF. All metrics are sign-adjusted so positive means "changed in the expected fatigue direction":
 
-### 4.6 Stage 6 (bonus): optional extensions
+- **M1**: Spearman correlation with time.
+- **M2**: OLS slope in percent of baseline per minute.
+- **M3**: Cohen's *d*, last 20% versus first 20% of windows.
+- **M4**: onset time.
 
-**B1: fatigue time constant (RQ4).** Fit the normalized MDF to `MDF(t) = a + (1 - a) * exp(-t / tau)` with `fminsearch` (base MATLAB) or `lsqcurvefit` if Optimization Toolbox is available. Report `tau` and `R^2` per subject. This is similar in spirit to parameter estimation in a Simulink model, but needs no Simulink. Subjects whose fit does not converge or has `R^2 < 0.3` are reported as such rather than dropped silently.
+Onset criteria:
 
-**B2: early-versus-late classification.** Train an SVM (`fitcsvm`) to separate early windows (first 20%) from late windows (last 20%), using leave-one-subject-out validation so that no subject appears in both training and test data. Compare single features and feature groups (spectral, time-domain, all). **Caveat that must appear in the results:** the labels are defined by time position, not by an independent fatigue measurement, so this tests whether a feature separates early from late, not whether it detects fatigue itself.
+- **O1 (primary)**: first window of the first run of 3 consecutive windows with `s * (y - 1) / baselineStd >= 3`.
+- **O2**: same run rule with `s * (y - 1) >= 0.10`.
+- **O3**: single two-segment least-squares change point. This replaces `findchangepts` and uses the smoothed normalized series; see `docs/formulation.md`.
 
-### 4.7 Validation checks
+Detection rate is reported separately from median onset time. A feature that rarely crosses its threshold is not treated as "late".
 
-- **Synthetic validation (E0).** A generator (`+synth/makeSyntheticFatigue.m`) produces 120 s signals at 200 Hz with a known onset time. Before onset, the signal is stationary colored noise. After onset, the spectral content shifts toward lower frequencies and the amplitude rises gradually. The pipeline must recover MDF onset within a stated tolerance, and must not report an onset on purely stationary signals more often than a stated false-positive rate.
-- **Unit tests** for RMS, MAV, MDF, MNF on known sinusoids and noise, window counting, filter gain, sign conventions, and onset logic.
-- **Data checks**: number of subjects, channels, and samples per recording, flat or clipped channels, number of distinct amplitude levels (8-bit check).
-- **Reproducibility**: fixed random seed (`rng(0)`), all parameters in `config/defaultConfig.m`, tested MATLAB release recorded in `results/run_info.json`.
+### 4.5 Inference
+
+Channels are collapsed to one median per subject before any statistical comparison. Inference is therefore across 15 subjects, never across correlated windows. Paired comparisons use Wilcoxon signed-rank with Holm correction; a Friedman test is the omnibus check on M3. With n = 15, p-values are exploratory and effect sizes are emphasized.
 
 ## 5. How MATLAB Was Used
 
-| Product | Used for |
+| Capability | Use in this repository |
 |---|---|
-| MATLAB | Data loading, pipeline, experiment scripts, figures, tables |
-| Signal Processing Toolbox | `butter`/`filtfilt`/`bandpass`, `iirnotch`, `pwelch`, `medfreq`, `meanfreq`, `findchangepts` |
-| Statistics and Machine Learning Toolbox | `corr` (Spearman), `signrank`, `friedman`, `fitcsvm`, `boxchart` |
-| Wavelet Toolbox (optional) | `modwt` for the wavelet energy ratio |
-| Unit testing framework | `matlab.unittest` tests in `tests/` |
+| Base MATLAB | Data loading, numeric filtering, FFT/Welch PSD, feature extraction, statistics, tables, figures |
+| MATLAB unit-testing framework | Nine acceptance tests in `tests/` |
+| `fminsearch` (base MATLAB) | Optional exponential time-constant fit in E7 |
+| Signal Processing Toolbox functions in the brief | Not installed; replaced by documented base-MATLAB code |
+| Statistics and Machine Learning Toolbox functions in the brief | Not installed; Spearman, Wilcoxon, Friedman and Holm implemented locally |
+| Wavelet Toolbox | Not installed; `wlr` skipped and logged |
+| Simulink | Not used; the brief's model-parameter-estimation analogy is conceptual only |
+
+Installed products, skipped features and substitutes are recorded in `results/run_info.json`.
 
 ## 6. How Generative AI Was Used
 
-> This section must reflect what the team actually did. Fill it from `docs/genai_log.md`, which is updated at every working session.
+Tools actually used: an OpenCode coding agent with the MATLAB MCP server, plus web/DOI lookups and `pdftotext` for the bundled paper. MATLAB Copilot and GitHub Copilot were not used.
 
-**Tools used:** `[TODO: list the tools actually used, e.g. Claude, MATLAB Copilot, GitHub Copilot, an agentic coding assistant]`
-
-### Workflow
-
-| Stage | How AI was used | How we verified the output |
+| Stage | How AI was used | Verification |
 |---|---|---|
-| Dataset search | Suggested candidate public sEMG fatigue datasets | Opened the dataset page and checked licence, sampling rate, channels, duration |
-| Planning and design | Discussing the study design and feature definitions | Compared against the literature and tested on synthetic signals |
-| Code | Drafting MATLAB functions and tests | Unit tests, synthetic validation (E0), manual inspection of figures |
-| Debugging | Explaining errors and proposing fixes | Reproduced the bug and checked the fix with a test |
-| Documentation | Drafting and editing README text | Team review against the actual results |
+| Dataset search and inspection | Suggested layout checks and parsed the downloaded archive | Zenodo/DOI pages checked; MAT and TXT files loaded in MATLAB; see `docs/dataset.md` |
+| Planning and design | Drafted feature definitions, onset rules and experiment structure | Compared with literature and tested on synthetic signals |
+| Code | Drafted pipeline functions, tests, figures and tables | `runtests('tests')` passed 9/9; full `main` run completed |
+| Debugging | Diagnosed shape, table-orientation and gain errors | Each fix rechecked against the relevant CSV or unit test |
+| Documentation | Drafted this README and the `docs/` files | Numbers checked against `results/tables/`; no unstated dataset facts kept |
 
-### Verification policy
+Examples where AI output was wrong and caught:
 
-- AI-generated code is not accepted until it passes a test we can explain.
-- Every reference is checked against the original source before it is cited.
-- Numbers in this README come from files in `results/`, not from AI text.
-- Where the dataset is silent (for example channel-to-muscle mapping), the code and README say so instead of guessing.
+- Passband gain was first computed from the real part of a complex transfer-function ratio; corrected to `1/abs(H0)` and verified by the filter-gain test.
+- Feature arrays collapsed to row vectors for one channel; corrected with explicit transposes.
+- Trend, ranking, robustness and channel tables initially had transposed or misaligned columns; corrected and rechecked against CSV headers.
+- Five E7 exponential fits hit the 1000 s tau bound; they are flagged `usableFit = 0` rather than reported as successful.
+- The E4 paired test initially took the first two entries of `cfg.featureNames` (RMS and MAV) while the table was labelled MDF vs RMS; corrected to explicit feature names and regenerated `E4_onset_pairwise.csv`.
 
-### Examples where AI output was wrong and we caught it
-
-`[Keep only entries that match your own log. Do not invent entries.]`
-
-- `[TODO: add real examples from docs/genai_log.md]`
-
-Full record: [`docs/genai_log.md`](docs/genai_log.md).
+The full working record is in [`docs/genai_log.md`](docs/genai_log.md).
 
 ## 7. Experiments
 
-All tables show planned results. Values are filled from the scripts in `experiments/` and from `results/tables/`.
+All reported experimental outcomes in this section come from CSV files in `results/tables/`; design constants such as window length and thresholds come from `config/defaultConfig.m` and the experiment scripts. No noise-amplitude sweep was run; E0's band-limited mixed noise and stationary null are the noise checks actually implemented.
 
-**E0: Synthetic validation.** Signals with known onset `t0` (default 40 s). Report: detected onset versus `t0` for each feature and criterion, false-positive rate on stationary signals, and the effect of added noise. Pass criteria are in Section 10 (acceptance tests).
+### E0 — synthetic validation
 
-| Feature | True onset (s) | Detected, O1 (s) | Error (s) | False-positive rate (stationary) |
-|---|---|---|---|---|
-| MDF | 40 | `[TBD]` | `[TBD]` | `[TBD]` |
-| MNF | 40 | `[TBD]` | `[TBD]` | `[TBD]` |
-| RMS | 40 | `[TBD]` | `[TBD]` | `[TBD]` |
-| MAV | 40 | `[TBD]` | `[TBD]` | `[TBD]` |
+Fifty seeded 120 s signals with onset at 40 s, plus 100 stationary signals. O1 acceptance tolerance: 12 s. Source: `E0_synthetic.csv`.
 
-**E1: Signal quality and filtering (before and after).** For all subjects: samples per channel, number of distinct amplitude levels, flat or clipped channels. For one representative subject: raw versus filtered time series and the power spectral density of the first versus last 10% of the recording.
+| Feature | True onset (s) | Detected O1 (s) | Absolute error (s) | Pass rate | Stationary false-positive rate |
+|---|---:|---:|---:|---:|---:|
+| MDF | 40 | 40 | 0 | 1.00 | 0.01 |
+| MNF | 40 | 39 | 1 | 1.00 | 0.02 |
+| RMS | 40 | 45 | 5 | 0.98 | 0.01 |
+| MAV | 40 | 45 | 5 | 1.00 | 0.02 |
 
-**E2: Feature trends.** Normalized feature versus time for each subject, plus the grand median with interquartile band across subjects. One figure per feature, and one combined figure with all features on the same normalized axis.
+Spectral features recover the known onset more precisely than amplitude features in this synthetic test.
 
-**E3: Sensitivity ranking.** The main result table.
+### E1 — signal quality and filtering
 
-| Feature | M1 Spearman (median [IQR]) | M2 slope (% baseline / min) | M3 Cohen's d | Direction as expected (subjects, of 15) |
-|---|---|---|---|---|
-| MDF | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| MNF | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| RMS | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| MAV | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| WLR (optional) | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
+Source: `E1_quality.csv` (120 rows: 15 subjects × 8 channels). Samples per channel range from 24,049 to 24,193, corresponding to 120.245–120.965 s at 200 Hz. Distinct amplitude levels range from 40 to 256, median 245.5. No flat channels were found. The fraction of samples equal to a channel's own minimum or maximum has median 0.001309 and maximum 0.08783. `docs/media/hero.png` and `results/figures/E1_quality.png` show subject 1, channel 1 before and after filtering.
 
-**E4: Onset detection comparison.**
+### E2 — feature trends
 
-| Feature | Detection rate O1 | Median onset O1 (s) | Detection rate O2 | Median onset O2 (s) | Median change-point O3 (s) |
-|---|---|---|---|---|---|
-| MDF | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| MNF | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| RMS | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
-| MAV | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` |
+Sources: `E2_trends.csv` and `E2_spectralShift.csv`. The absolute early-versus-late shift is the median across subject-channel pairs; early and late are the first and last 10% of windows, respectively.
 
-Paired comparisons (for example MDF versus RMS onset time across subjects where both are detected) are reported with the Wilcoxon signed-rank test, the Holm-corrected p-value, and the number of subjects entering the comparison.
+| Feature | Early median (Hz) | Late median (Hz) | Shift (Hz) |
+|---|---:|---:|---:|
+| MDF | 63.737 | 55.745 | −7.992 |
+| MNF | 59.873 | 55.883 | −3.990 |
 
-**E5: Robustness to analysis choices.** Repeat E3 while varying one setting at a time: window length (1, 2, 4 s), overlap (0, 0.5, 0.75), filter band (`[20 90]`, `[10 90]`, `[30 90]`), baseline fraction (0.05, 0.10, 0.20). Report whether the feature ranking by M3 changes.
+At the last recorded window centre, `t_s = 119` s, the grand-median normalized values are RMS 1.428, MAV 1.428, MDF 0.901 and MNF 0.938.
 
-| Setting | Value | Ranking by M3 (best to worst) | Same as default? |
+### E3 — sensitivity ranking
+
+Source: `E3_ranking.csv`. M1, M2 and M3 are medians across subjects after collapsing channels; IQR is in brackets. Direction counts are out of 15 subjects. Ranking is by descending M3.
+
+| Feature | M1 [IQR] | M2 (%/min) [IQR] | M3 [IQR] | Direction as expected | Rank by M3 |
+|---|---:|---:|---:|---:|---:|
+| MAV | 0.780 [0.280] | 23.630 [13.868] | 4.269 [2.760] | 15/15 | 1 |
+| RMS | 0.785 [0.287] | 22.893 [14.963] | 4.192 [2.636] | 15/15 | 2 |
+| MNF | 0.611 [0.280] | 3.110 [1.504] | 2.017 [1.285] | 15/15 | 3 |
+| MDF | 0.580 [0.271] | 5.126 [2.283] | 1.947 [1.380] | 15/15 | 4 |
+
+WLR is not in the table: Wavelet Toolbox is unavailable, and this is logged in `results/run_info.json`.
+
+Omnibus and paired tests:
+
+- Friedman on subject-level M3: Q = 11.4, p = 0.00975, four features, 15 subjects (`E3_friedman.csv`).
+- Six paired Wilcoxon comparisons on M3: none is significant after Holm correction. The smallest adjusted p is 0.10235 (`E3_pairwise.csv`).
+
+The ranking is therefore a consistent descriptive ordering, not a set of statistically separated feature pairs.
+
+### E4 — onset detection comparison
+
+Source: `E4_onsets.csv`. Detection rate is over 120 subject-channel pairs; median onset is computed only over detected pairs.
+
+| Feature | Detection rate O1 | Median O1 (s) | Detection rate O2 | Median O2 (s) | Median O3 (s) |
+|---|---:|---:|---:|---:|---:|
+| MDF | 0.408 | 79.5 | 0.625 | 54 | 59 |
+| MNF | 0.450 | 88 | 0.400 | 95 | 53 |
+| RMS | 0.825 | 48 | 0.925 | 21 | 54 |
+| MAV | 0.842 | 47 | 0.925 | 20.5 | 55.5 |
+
+Planned paired comparison (`E4_onset_pairwise.csv`): MDF versus RMS under O1, using the 15 subjects where both were detected. Median paired difference (MDF − RMS) is 27 s, raw p = 0.01460, Holm-adjusted p = 0.01460. This Holm family contains one test, so adjustment leaves p unchanged. The paired median differs from the unpaired medians in the main table because it uses only jointly detected subjects.
+
+### E5 — robustness to analysis choices
+
+Source: `E5_robustness.csv`. "Same" compares the entire four-feature order with the default order, `mav > rms > mnf > mdf`.
+
+| Setting | Value | Ranking by M3 | Same order? |
 |---|---|---|---|
-| Default | 2 s, 0.5, [20 90], 0.10 | `[TBD]` | n/a |
-| Window | 1 s | `[TBD]` | `[TBD]` |
-| Window | 4 s | `[TBD]` | `[TBD]` |
-| Band | [10 90] | `[TBD]` | `[TBD]` |
-| Band | [30 90] | `[TBD]` | `[TBD]` |
+| Default | 2 s, 0.5, [20 90], 0.10 | mav > rms > mnf > mdf | n/a |
+| Window | 1 s | mav > rms > mnf > mdf | Yes |
+| Window | 4 s | rms > mav > mnf > mdf | No |
+| Overlap | 0 | rms > mav > mnf > mdf | No |
+| Overlap | 0.75 | mav > rms > mnf > mdf | Yes |
+| Band | [10 90] | rms > mav > mnf > mdf | No |
+| Band | [30 90] | mav > rms > mnf > mdf | Yes |
+| Baseline | 0.05 | mav > rms > mnf > mdf | Yes |
+| Baseline | 0.20 | mav > rms > mnf > mdf | Yes |
 
-**E6: Channel consistency.** For each feature, the fraction of subject-channel pairs that change in the expected direction, per channel (1 to 8). Reveals whether the result depends on a few channels.
+The full order is unchanged in 6 of the 9 settings. In the three changed settings, the top two swap but MNF still precedes MDF.
 
-**E7 (bonus): Fatigue time constant.** Distribution of `tau` and `R^2` from B1, with the number of subjects where the fit failed.
+### E6 — channel consistency
 
-**E8 (bonus): Early-versus-late classification.** Balanced accuracy under leave-one-subject-out validation for each feature and feature group, with the label caveat from Section 4.6 stated next to the table.
+Source: `E6_channels.csv`. Cells are fractions of the 15 subjects with positive M3 for that channel and feature.
+
+| Channel | RMS | MAV | MDF | MNF |
+|---:|---:|---:|---:|---:|
+| 1 | 0.933 | 0.933 | 0.600 | 0.667 |
+| 2 | 1.000 | 0.933 | 0.600 | 0.733 |
+| 3 | 0.733 | 0.733 | 0.800 | 0.867 |
+| 4 | 0.800 | 0.800 | 1.000 | 1.000 |
+| 5 | 1.000 | 1.000 | 0.867 | 0.867 |
+| 6 | 0.933 | 0.933 | 1.000 | 1.000 |
+| 7 | 0.933 | 0.933 | 0.933 | 0.933 |
+| 8 | 0.933 | 0.933 | 0.933 | 0.867 |
+
+Amplitude features are at least 0.733 in every channel. Spectral features reach 1.000 in channels 4 and 6 but range from 0.600 to 0.733 in channels 1 and 2.
+
+### E7 — fatigue time constant (bonus)
+
+Sources: `E7_timeConstant.csv` and `E7_summary.csv`. Seven of 15 subject fits meet the `R^2 >= 0.3` usability criterion. For those seven, median tau is 354.4 s and median R² is 0.423. Tau is longer than the roughly 120 s recording for most usable fits, and eight fits are poor; this experiment is a descriptive curve summary, not evidence of a physiological time constant.
+
+### E8 — early-versus-late classification (not run)
+
+Not implemented. `fitcsvm` is unavailable, and labels defined only by time position would not be an independent fatigue label. The skip is recorded in `results/run_info.json`.
 
 ## 8. Key Results
 
-> Fill this section with final figures and tables. Every claim must have a number next to it, and every number must be reproducible from `main.m` or a script in `experiments/`. Do not write results that are not in `results/`.
+- **Cleaning and spectral shift.** The hero figure shows subject 1 channel 1 before and after band-pass filtering, plus the early-versus-late PSD. Across subject-channel pairs, MDF falls from 63.737 Hz to 55.745 Hz (−7.992 Hz) and MNF falls from 59.873 Hz to 55.883 Hz (−3.990 Hz) (`E2_spectralShift.csv`). At `t_s = 119` s the normalized medians are MDF 0.901, MNF 0.938, RMS 1.428 and MAV 1.428 (`E2_trends.csv`).
+- **Feature ranking.** By M3 the order is MAV (4.269), RMS (4.192), MNF (2.017), MDF (1.947); all four features change in the expected direction for 15/15 subjects (`E3_ranking.csv`). The Friedman check is Q = 11.4, p = 0.00975 (`E3_friedman.csv`), but no individual pair survives Holm correction (smallest adjusted p = 0.10235, `E3_pairwise.csv`).
+- **Onset.** Under O1, MAV and RMS are detected in 0.842 and 0.825 of subject-channel pairs with median onsets of 47 s and 48 s; MDF and MNF are detected in 0.408 and 0.450 with median onsets of 79.5 s and 88 s (`E4_onsets.csv`). Detection rate and onset time must be read together.
+- **Robustness.** The full ranking is unchanged in 6 of 9 settings; a 4 s window, zero overlap, or a 10–90 Hz band swaps only MAV and RMS (`E5_robustness.csv`).
+- **H1 — supported.** MDF and MNF decrease for 15/15 subjects and their absolute shifts are −7.992 Hz and −3.990 Hz (`E2_spectralShift.csv`, `E3_ranking.csv`).
+- **H2 — supported.** RMS and MAV increase for 15/15 subjects and finish above baseline at 1.428 and 1.428 normalized units (`E3_ranking.csv`, `E2_trends.csv`).
+- **H3 — not supported.** Amplitude features outrank spectral features by M3 (MAV 4.269 versus MDF 1.947) and have higher O1 detection rates and earlier median detected onsets. The pairwise M3 differences are not Holm-significant, so this is a descriptive reversal of the expected order, not a significant feature separation (`E3_ranking.csv`, `E3_pairwise.csv`, `E4_onsets.csv`).
 
-- Raw versus filtered signal and early versus late spectrum (E1), with the visible spectral shift quantified in Hz
-- Normalized feature trends, grand median with spread (E2)
-- Ranking of features with effect sizes and consistency (E3)
-- Onset times and detection rates per feature (E4)
-- Whether the ranking survives changes in analysis settings (E5)
-- Support status of H1, H2, H3: supported, partly supported, or not supported, each with the evidence
-- One headline sentence of the form: *"On this dataset, `[feature]` showed the largest effect size (median d = `[X]`) and the earliest detected onset (median `[Y]` s), `[Z]` s earlier than `[feature]`."* Only write it with real numbers.
+**Headline:** On this dataset, **MAV** showed the largest effect size (median *d* = 4.269) and the earliest detected O1 onset (median 47 s), 32.5 s earlier than MDF (median 79.5 s), with the caveat that those medians are conditional on detection and the M3 pair was not statistically separated after Holm correction.
 
 ## 9. Repository Structure and Data Contracts
 
-```
+```text
 .
 ├── README.md
-├── main.m                      % runs the full pipeline from scratch (E0-E6, optional E7-E8)
-├── downloadData.m              % downloads and verifies the dataset (md5), unzips to data/raw/
-├── config/
-│   └── defaultConfig.m         % all parameters in one struct
-├── +data/                      % loading and quality checks
-│   ├── loadDataset.m
-│   └── qualityCheck.m
-├── +preproc/                   % filtering and windowing
-│   ├── bandpassEMG.m
-│   └── segmentWindows.m
-├── +features/                  % feature extraction
-│   ├── timeDomain.m
-│   ├── spectral.m
-│   ├── waveletRatio.m          % optional
-│   └── extractAll.m
-├── +analysis/                  % normalization, onset, metrics, statistics
-│   ├── normalizeBaseline.m
-│   ├── detectOnset.m
-│   ├── sensitivityMetrics.m
-│   ├── rankFeatures.m
-│   ├── fitFatigueTimeConstant.m   % bonus
-│   └── classifyEarlyLate.m        % bonus
-├── +synth/
-│   └── makeSyntheticFatigue.m
-├── +viz/                       % one function per figure type
-├── experiments/                % run_E0.m ... run_E8.m
-├── tests/                      % matlab.unittest tests
-├── data/
-│   └── raw/                    % NOT committed (see .gitignore); created by downloadData.m
+├── main.m                      % runs E0-E7 from scratch
+├── downloadData.m              % downloads, MD5-verifies and unzips the dataset
+├── config/defaultConfig.m      % every parameter in one struct
+├── +data/                      % loadDataset.m, qualityCheck.m
+├── +preproc/                   % bandpassEMG.m, segmentWindows.m
+├── +features/                  % timeDomain.m, spectral.m, welchPSD.m, extractAll.m
+├── +analysis/                  % normalization, onset, metrics, ranking, E7 fit
+├── +synth/                     % makeSyntheticFatigue.m
+├── +viz/                       % one function per figure, including heroFigure.m
+├── experiments/                % run_E0.m ... run_E7.m
+├── tests/                      % matlab.unittest acceptance tests
+├── data/raw/                   % not committed; created by downloadData.m
 ├── results/
-│   ├── figures/                % png, 300 dpi
-│   ├── tables/                 % csv, source of every number in Section 8
-│   └── run_info.json           % MATLAB release, toolboxes, date, seed, config
+│   ├── figures/                % labelled PNGs, 300 dpi where printed
+│   ├── tables/                 % CSV source of Section 7 and 8 numbers
+│   └── run_info.json           % release, products, seed, config, skips, substitutes
 └── docs/
-    ├── dataset.md              % what the files actually contain (filled by the agent)
-    ├── formulation.md          % exact feature and onset definitions as implemented
-    ├── literature.md
+    ├── dataset.md
+    ├── formulation.md
     ├── genai_log.md
-    └── media/
+    ├── literature.md
+    └── media/hero.png
 ```
 
-### Shared data contracts
-
-| From to | Structure |
+| From → to | Structure |
 |---|---|
-| Loader to everything | `subjects` struct array. Fields: `id` (integer), `emg` (`N x 8` double, samples by channels), `fs` (Hz), `source` (file name) |
-| Preprocessing to Features | `emgFilt` (`N x 8`), `fs` |
-| Segmentation | `win` (`winLen x nWin x 8`), `tc` (`nWin x 1`, window center times in s) |
-| Features to Analysis | Long-format `table` `T` with columns `subject, channel, win, t_s, rms, mav, mdf, mnf, wlr` (`wlr` is NaN if not computed) |
-| Normalization | Same table plus `<feature>_n` (normalized) and `<feature>_s` (normalized and smoothed) columns |
-| Metrics | `table` with columns `subject, channel, feature, M1, M2, M3, onset_O1, onset_O2, onset_O3` |
-| Config | `cfg` struct from `config/defaultConfig.m`: `fs, band, filtOrder, applyNotch, winSec, overlap, specBand, baselineFrac, smoothWin, zThresh, kConsec, pctThresh, earlyLateFrac, seed` |
+| Loader → pipeline | `subjects` struct array: `id`, `emg` (N × 8 double), `fs`, `source` |
+| Preprocessing → features | Filtered N × 8 matrix and `cfg.fs` |
+| Segmentation → features | `win` (winLen × nWin × 8), `tc` (nWin × 1 window-centre seconds) |
+| Features → analysis | Long table `T`: `subject`, `channel`, `win`, `t_s`, `rms`, `mav`, `mdf`, `mnf` |
+| Normalization | Same table plus `<feature>_n`, `<feature>_s`, `<feature>_bstd` |
+| Metrics | `subject`, `channel`, `feature`, `M1`, `M2`, `M3`, `onset_O1`, `onset_O2`, `onset_O3`, `directionOK` |
+| Config | `cfg` from `config/defaultConfig.m` |
 
-Default values: `fs = 200`, `band = [20 90]`, `filtOrder = 4`, `applyNotch = false`, `winSec = 2`, `overlap = 0.5`, `specBand = [20 90]`, `baselineFrac = 0.10`, `smoothWin = 5`, `zThresh = 3`, `kConsec = 3`, `pctThresh = 0.10`, `earlyLateFrac = 0.20`, `seed = 0`.
+Defaults: `fs = 200`, `band = [20 90]`, `filtOrder = 4`, `applyNotch = false`, `winSec = 2`, `overlap = 0.5`, `specBand = [20 90]`, `baselineFrac = 0.10`, `smoothWin = 5`, `zThresh = 3`, `kConsec = 3`, `pctThresh = 0.10`, `earlyLateFrac = 0.20`, `seed = 0`.
 
-## 10. Implementation Plan and Agent Rules
+## 10. Implementation Record
 
-*This section is a work plan for a coding agent. It can be removed from the final README once the code is complete.*
+| Task | Status |
+|---|---|
+| Download, MD5 verify, unzip, inspect files | Complete; recorded in `docs/dataset.md` |
+| Loader for MAT and TXT sources | Complete; real data loaded as 15 subjects × 8 channels |
+| Per-subject/channel quality table | Complete; `E1_quality.csv` |
+| Configuration struct and preprocessing | Complete; base-MATLAB Butterworth with zero-phase filtering |
+| Feature extraction and synthetic generator | Complete; tests for RMS, MAV, MDF, MNF and filter gain pass |
+| Normalization, onset, metrics and ranking | Complete; sign conventions tested |
+| Experiments E0–E6 | Complete; CSVs and figures present |
+| Main entry point and provenance | Complete; `main` writes `results/run_info.json` |
+| Bonus E7 | Complete; fit quality flagged, summary CSV written |
+| Bonus E8 | Skipped and logged: unavailable `fitcsvm` and no independent labels |
+| Wavelet ratio | Skipped and logged: Wavelet Toolbox unavailable |
+| Unit tests | 9 passed, 0 failed, 0 incomplete |
+| Full pipeline run | Completed in 73.6 s on the final verification run on the tested Windows machine |
 
-### 10.1 Agent rules
-
-1. **Do not invent facts about the dataset.** Inspect the downloaded files and write what you find in `docs/dataset.md`. If something differs from Section 4.1 (number of subjects, channels, samples, sampling rate), stop treating the README as correct, adapt the code through `cfg`, and record the discrepancy in `docs/dataset.md`.
-2. **Do not assign channels to muscles** unless the NILES 2020 paper or the dataset files state the mapping. Leave it as `[TODO]`.
-3. **Do not invent numbers.** Every number in Section 8 must come from a CSV in `results/tables/`. If an experiment cannot run, say so in the README instead of filling in plausible values.
-4. **Do not tune the method to make a hypothesis come true.** Parameters are fixed in `defaultConfig.m` before looking at E3 and E4. Changes after seeing results are allowed only if logged in `docs/genai_log.md` with the reason, and E5 reports the sensitivity to them.
-5. **Keep it simple.** Plain functions and a `cfg` struct. No GUI, no deep learning, no toolboxes beyond those listed in Section 5. If an optional toolbox is missing, skip that feature and write the skip into `results/run_info.json`.
-6. **Verify function signatures** in the installed MATLAB release documentation before using them (especially `medfreq`, `meanfreq`, `findchangepts`, `pwelch`, `boxchart`). Prefer the documented syntax over memory.
-7. **Every function gets** a header comment (purpose, inputs with units, outputs), and every figure is saved to `results/figures/` with axis labels and units.
-8. **If MATLAB cannot be run by the agent**, write all code and tests anyway, and list in the final message exactly which commands the human must run and what output to expect.
-9. **Do not commit** the raw dataset. Add `data/raw/` to `.gitignore`.
-
-### 10.2 Tasks (in order)
-
-| # | Task | Output | Done when |
-|---|---|---|---|
-| 1 | `downloadData.m`: download the zip with `websave`, verify the md5 (Java `MessageDigest` or equivalent), unzip to `data/raw/`. Then inspect the contents and write `docs/dataset.md` (file names, variable names, matrix orientation, units if stated, anything unexpected). | `data/raw/`, `docs/dataset.md` | md5 matches; `docs/dataset.md` describes the real layout |
-| 2 | `+data/loadDataset.m`: support both the per-subject txt files and the combined .mat file (whichever is present). Return the `subjects` contract. Assert and report subject count, channel count, samples, and duration. | `loadDataset.m` | Returns the expected struct; discrepancies are printed, not hidden |
-| 3 | `+data/qualityCheck.m`: samples, duration, flat channels (near-zero variance), clipping (fraction of samples at min or max), distinct amplitude levels. | `results/tables/E1_quality.csv` | Table has one row per subject and channel |
-| 4 | `config/defaultConfig.m` with the defaults from Section 9. | `defaultConfig.m` | All other functions take `cfg` |
-| 5 | `+preproc/bandpassEMG.m` and `+preproc/segmentWindows.m`. | Two functions | Unit tests 4 and 5 pass |
-| 6 | `+features/timeDomain.m`, `spectral.m`, `extractAll.m` (and `waveletRatio.m` if the Wavelet Toolbox is available). Document exact definitions in `docs/formulation.md`. | Functions, `docs/formulation.md` | Unit tests 1, 2, 3 pass |
-| 7 | `+synth/makeSyntheticFatigue.m` and the E0 experiment. | `results/tables/E0_synthetic.csv`, figure | E0 acceptance criteria met (10.3) |
-| 8 | `+analysis/normalizeBaseline.m`, `detectOnset.m`, `sensitivityMetrics.m`. | Functions | Unit tests 6 and 7 pass |
-| 9 | Experiments E1 to E4 on the real data. | CSVs in `results/tables/`, figures in `results/figures/` | Files exist; figures labelled with units |
-| 10 | `+analysis/rankFeatures.m` (median and IQR across subjects, `signrank` with Holm correction, `friedman`). E5 and E6. | CSVs and figures | Ranking table and robustness table exist |
-| 11 | `main.m` runs Stage 0 to E6 from scratch, and writes `results/run_info.json`. | `main.m` | A fresh MATLAB session runs `main` without errors |
-| 12 | Bonus, only if tasks 1 to 11 are done: B1 and E7, B2 and E8. | CSVs, figures | Caveats from Section 4.6 appear in the output |
-| 13 | Fill Section 8 of this README from `results/tables/` only. Update `[TBD]` cells. Write the support status of H1 to H3. | Updated README | No `[TBD]` left in Sections 7 and 8, or each remaining one is explained |
-
-Suggested time budget for a one-day run (human plus agent): data and loader 1 to 1.5 h, preprocessing and features 1.5 h, synthetic validation 1 h, experiments E1 to E6 2 h, figures and README 2 h, bonus only if time remains.
-
-### 10.3 Acceptance tests (`tests/`, run with `runtests("tests")`)
-
-| # | Test | Pass criterion |
-|---|---|---|
-| 1 | RMS and MAV of a sinusoid of amplitude `A` | RMS equals `A/sqrt(2)` and MAV equals `2A/pi` within 1% |
-| 2 | MDF and MNF of a 40 Hz sinusoid with small noise | Both within 1.5 Hz of 40 Hz |
-| 3 | MDF of a signal made of two sinusoids of equal power at 30 Hz and 60 Hz | MDF between 30 and 60 Hz; MNF within 2 Hz of 45 Hz |
-| 4 | Band-pass gain | Gain at 50 Hz above 0.9, gain at 5 Hz below 0.1 (measured by filtering sinusoids) |
-| 5 | Segmentation | Number of windows equals `floor((N - winLen)/hop) + 1`; window center times are correct |
-| 6 | Sign convention | A synthetic rising feature gives positive M1 with `s = +1`, and a falling feature gives positive M1 with `s = -1` |
-| 7 | Onset detector on a synthetic step | On a clean step at 40 s, the detected onset (O1) is within 12 s of the true time; on stationary noise it returns `NaN` in at least 90% of 100 seeded repetitions |
-| 8 | Loader (real data) | Returns the number of subjects and channels recorded in `docs/dataset.md`; skipped with a message if data are absent |
-| 9 | E0 end to end | MDF onset (O1) within 12 s of the true onset in at least 80% of 50 seeded synthetic runs |
-
-If a criterion proves unreasonable (for example the 12 s tolerance given the smoothing lag), the agent changes it only with a written reason in `docs/genai_log.md`.
+Notable deviations from the supplied README are logged in `docs/formulation.md` and `docs/genai_log.md`: base-MATLAB substitutes, O3 using the smoothed normalized series, no noise sweep, and the E7 fit-quality flag.
 
 ## 11. Getting Started
 
-**Requirements:** MATLAB `[TODO: release]`, Signal Processing Toolbox, Statistics and Machine Learning Toolbox. Optional: Wavelet Toolbox.
+**Requirements:** MATLAB R2026b Update 1 or a compatible release. No additional toolbox is required for this implementation. The dataset is about 10.6 MB.
 
 ```matlab
-% 1. Clone the repository and open the project folder in MATLAB
-% 2. Download and verify the dataset (about 10.6 MB)
+% 1. Open this folder in MATLAB
+% 2. Download and verify the dataset
 downloadData
 
-% 3. Run the tests
+% 3. Run the acceptance tests
 runtests("tests")
 
-% 4. Run the full pipeline (E0 to E6)
+% 4. Run the full pipeline (E0-E7)
 main
 ```
 
-Figures are written to `results/figures/` and tables to `results/tables/`. To use your own recording, provide a `subjects` struct (Section 9) with `emg` as samples by channels and `fs` in Hz, and set `cfg.band` below `fs/2`. Random seeds, parameters, and the MATLAB release are recorded in `results/run_info.json`. `[TODO: add expected run time on a stated machine.]`
+Expected output: 9 passing tests, then tables in `results/tables/`, figures in `results/figures/`, the hero figure in `docs/media/hero.png`, and provenance in `results/run_info.json`. Measured run time on the tested machine is about 74 s for `main`.
+
+To use a different recording, provide a `subjects` struct with `emg` as samples × channels and `fs` in Hz, and keep every `cfg.band` upper cutoff below `fs/2`.
 
 ## 12. Limitations and Future Work
 
-- **No independent fatigue ground truth.** The dataset has no labels or force measurement that mark fatigue. "Onset" is defined by our criteria, so results say when a feature departs from its baseline, not when the muscle is physiologically fatigued.
-- **Low bandwidth and resolution.** At 200 Hz and 8 bit, high-frequency content above 100 Hz is lost and quantization noise is larger than in typical lab recordings. Conclusions may not transfer to 1 to 2 kHz recordings.
-- **One task, one muscle group (probably), small sample.** The task is a 6 kg load held at 90 degrees of elbow flexion for 120 s, with 15 subjects. We do not claim generality. Which muscles the 8 channels cover is not stated on the dataset page.
+- **No independent fatigue ground truth.** Onset means departure from baseline under our criteria, not a physiologically confirmed fatigue boundary.
+- **Low bandwidth and resolution.** The 200 Hz / 8-bit Myo-armband recording loses high-frequency content and has coarse amplitude quantization. Conclusions may not transfer to 1–2 kHz lab recordings.
+- **One task, small sample.** Fifteen subjects, one 6 kg isometric elbow-flexion task. Only channel 4 has a stated muscle name; other channels are not assigned to muscles.
 - **Already notch-filtered.** The 50 Hz notch distorts the spectrum near 50 Hz in all windows.
-- **Overlapping windows are correlated.** Window-level statistics are descriptive; inference is across subjects only, and with n = 15 it is exploratory.
-- **Onset criteria have free parameters** (`zThresh`, `kConsec`, `pctThresh`, smoothing). E5 and E0 examine sensitivity but cannot remove this subjectivity.
-- **Not a clinical tool.** This is a demonstration of a MATLAB workflow and makes no diagnostic claim.
-- Future work: validate on a higher-sampling-rate dataset (for example the second dataset in Section 4.1), include dynamic contractions, add additional indices (for example spectral indices and fractal dimension), relate onset to independent measures such as force decline or self-reported effort, and package the pipeline as an App Designer front end.
+- **Correlated windows.** Window-level values are descriptive; inference is across 15 subjects and remains exploratory.
+- **Free onset parameters.** Thresholds, run length and smoothing affect O1/O2. E0 and E5 probe sensitivity but cannot remove this choice.
+- **Ranking is descriptive.** The Friedman test is significant, but no M3 pair survives Holm correction.
+- **E7 is not a validated physiological model.** Only 7/15 fits are usable and most usable tau values exceed the recording duration.
+- **Substitutes differ from toolbox references.** Base-MATLAB Welch, rank tests and change-point search are documented, but results are not claimed identical to toolbox implementations.
+- **Not a clinical tool.** This is a workflow demonstration and makes no diagnostic claim.
+
+Future work: validate on a dataset with independent fatigue labels and higher bandwidth, include dynamic contractions, test additional time-frequency and nonlinear indices, relate onset to force decline or self-reported effort, and package the workflow as an App Designer front end.
 
 ## 13. Team
 
-| Member | Role | Responsibilities |
-|---|---|---|
-| **Jennifer** | `[TODO: confirm]` Signal processing and analysis lead | Pipeline design, feature extraction, statistics, results interpretation |
-| **Kael** | `[TODO: confirm]` Validation and documentation lead | Synthetic validation, tests, figures, README and video |
-| Both | | `docs/genai_log.md` entries, review of agent-written code, final check that every number in Section 8 traces to a file in `results/` |
+| Member | Notes |
+|---|---|
+| **Akhtar Kael** | Named in the repository README; role assignment was not stated and was not invented |
+| **Jennifer Jestina** | Named in the repository README; role assignment was not stated and was not invented |
+| Both | Human review of agent-written code and final traceability check of Section 8 numbers |
 
 ## 14. References
 
-> Check every entry against the original source before submission.
-
-1. A. Ebied, A. M. Awadallah, M. A. Abbass, and Y. El-Sharkawy, *Multi-channel Surface EMG Dataset for Fatigue analysis*, Zenodo, 2021. DOI: 10.5281/zenodo.5189275. Licence CC BY 4.0.
-   *Used for: the primary dataset.*
-2. A. Ebied, A. M. Awadallah, M. A. Abbass, and Y. El-Sharkawy, "Upper Limb Muscle Fatigue Analysis Using Multi-channel Surface EMG," *2nd Novel Intelligent and Leading Emerging Sciences Conference (NILES)*, 2020, pp. 423-427. DOI: 10.1109/NILES50944.2020.9257909
-   *Used for: the dataset's original paper; `[TODO: channel-to-muscle mapping and protocol details]`.*
-3. J. Lim, L. Lu, K. Goonewardena, J. Z. Liu, and Y. Tan, "Assessment of Self-report, Palpation, and Surface Electromyography Dataset During Isometric Muscle Contraction," *Scientific Data*, vol. 11, 2024. DOI: 10.1038/s41597-024-03030-8
-   *Used for: optional second dataset.*
-4. C. J. De Luca, "Myoelectrical manifestations of localized muscular fatigue in humans," *Critical Reviews in Biomedical Engineering*, vol. 11, no. 4, pp. 251-279, 1984. `[TODO: verify details]`
-   *Used for: spectral shift and amplitude changes as fatigue indicators.*
-5. M. Cifrek, V. Medved, S. Tonkovic, and S. Ostojic, "Surface EMG based muscle fatigue evaluation in biomechanics," *Clinical Biomechanics*, vol. 24, no. 4, pp. 327-340, 2009. `[TODO: verify details]`
-   *Used for: review of EMG fatigue indices.*
-6. A. Phinyomark, P. Phukpattaranont, and C. Limsakul, "Feature reduction and selection for EMG signal classification," *Expert Systems with Applications*, vol. 39, no. 8, pp. 7420-7431, 2012. `[TODO: verify details]`
-   *Used for: definitions of time-domain EMG features.*
-7. MathWorks, *Classify Arm Motions Using EMG Signals and Deep Learning*. https://www.mathworks.com/help/signal/ug/classify-arm-motions-using-emg-signals-and-deep-learning.html
-   *Used for: structure of a MATLAB EMG example and reference band-pass preprocessing; this work uses classical features instead of deep learning.*
-8. MathWorks, *Muscle Reflex Parameter Estimation*. https://www.mathworks.com/help/sldo/ug/muscle-reflex-parameter-estimation.html
-   *Used for: presentation structure (model, data, mismatch, estimation, validation) that inspired the bonus time-constant fit.*
-9. `[TODO: add the recent sEMG fatigue detection papers from docs/literature.md.]`
+1. A. Ebied, A. M. Awadallah, M. A. Abbass, and Y. El-Sharkawy, *Multi-channel Surface EMG Dataset for Fatigue analysis*, Zenodo, 2021. DOI `10.5281/zenodo.5189275`. CC BY 4.0. *Primary dataset.*
+2. A. Ebied, A. M. Awadallah, M. A. Abbass, and Y. El-Sharkawy, "Upper Limb Muscle Fatigue Analysis Using Multi-channel Surface EMG," *NILES 2020*, pp. 423–427. DOI `10.1109/NILES50944.2020.9257909`. *Source paper; channel 4 placement and task protocol.*
+3. C. J. De Luca, "Myoelectrical manifestations of localized muscular fatigue in humans," *Critical Reviews in Biomedical Engineering*, 11(4), 251–279, 1984. PMID 6391814. *Classical spectral-shift rationale.*
+4. M. Cifrek, V. Medved, S. Tonković, and S. Ostojić, "Surface EMG based muscle fatigue evaluation in biomechanics," *Clinical Biomechanics*, 24(4), 327–340, 2009. DOI `10.1016/j.clinbiomech.2009.01.010`. *Review of fatigue indices.*
+5. M. Gazzoni, A. Botter, and T. M. M. Vieira, "Surface EMG and muscle fatigue: multi-channel approaches to the study of myoelectric manifestations of muscle fatigue," *Physiological Measurement*, 38(5), R27, 2017. DOI `10.1088/1361-6579/aa60b9`. *Multi-channel motivation.*
+6. A. Phinyomark, P. Phukpattaranont, and C. Limsakul, "Feature reduction and selection for EMG signal classification," *Expert Systems with Applications*, 39(8), 7420–7431, 2012. DOI `10.1016/j.eswa.2012.01.102`. *Time-domain feature background.*
+7. F. N. Jamaluddin, F. Ibrahim, and S. A. Ahmad, "A New Approach to Noninvasive-Prolonged Fatigue Identification Based on Surface EMG Time-Frequency and Wavelet Features," *Journal of Healthcare Engineering*, 2023, 1951165. DOI `10.1155/2023/1951165`. *Recent time-frequency context.*
+8. G. Cho et al., "Characterization of signal features for real-time sEMG onset detection," *Biomedical Signal Processing and Control*, 84, 104774, 2023. DOI `10.1016/j.bspc.2023.104774`. *Recent onset-detection context.*
+9. S. M. Cerqueira, R. Vilas Boas, J. Figueiredo, and C. P. Santos, "A Comprehensive Dataset of Surface Electromyography and Self-Perceived Fatigue Levels for Muscle Fatigue Analysis," *Sensors*, 24(24), 8081, 2024. DOI `10.3390/s24248081`. *Candidate labelled dataset for future validation.*
+10. J. Lim, L. Lu, K. Goonewardena, J. Z. Liu, and Y. Tan, "Assessment of Self-report, Palpation, and Surface Electromyography Dataset During Isometric Muscle Contraction," *Scientific Data*, 11, 208, 2024. DOI `10.1038/s41597-024-03030-8`. *Optional second dataset in the brief; not used here.*
+11. MathWorks, *Classify Arm Motions Using EMG Signals and Deep Learning*. <https://www.mathworks.com/help/signal/ug/classify-arm-motions-using-emg-signals-and-deep-learning.html>
+12. MathWorks, *Muscle Reflex Parameter Estimation*. <https://www.mathworks.com/help/sldo/ug/muscle-reflex-parameter-estimation.html> *Conceptual presentation reference for the E7 parameter fit.*
 
 ## Acknowledgements
 
-Built for `[TODO: program name]`. We thank `[TODO: academic advisor, if any]` for guidance. The dataset authors released their data under CC BY 4.0, which made this study possible. All analysis code in this repository was reviewed by the team; see Section 6 for how generative AI was used.
+The dataset authors released their data under CC BY 4.0, which made this study possible. All analysis code in this repository was checked with unit tests and an end-to-end run; see Section 6 and `docs/genai_log.md` for how generative AI was used.
 
 ## Licence
 
-`[TODO: e.g. MIT]` for the code. The dataset retains its own licence (CC BY 4.0) and is not redistributed in this repository.
+The code licence was not specified in the supplied brief. The dataset retains its own CC BY 4.0 licence and is not redistributed in this repository.

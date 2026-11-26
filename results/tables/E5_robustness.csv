@@ -1,0 +1,10 @@
+label,rankingByM3,sameAsDefault,M3_MDF,M3_RMS
+Default,mav > rms > mnf > mdf,1,1.94652373681483,4.19155084226626
+Window 1 s,mav > rms > mnf > mdf,1,1.24480608222915,3.33827944782706
+Window 4 s,rms > mav > mnf > mdf,0,2.67703001405631,5.21726866700045
+Overlap 0,rms > mav > mnf > mdf,0,2.52001717239915,5.55813462423258
+Overlap 0.75,mav > rms > mnf > mdf,1,1.38432410859082,3.54989130147458
+Band [10 90],rms > mav > mnf > mdf,0,1.97728573440163,4.27072381654917
+Band [30 90],mav > rms > mnf > mdf,1,1.24171205978784,3.47719426181779
+Baseline 0.05,mav > rms > mnf > mdf,1,1.94652373681483,4.19155084226625
+Baseline 0.20,mav > rms > mnf > mdf,1,1.94652373681483,4.19155084226625

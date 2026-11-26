@@ -1,0 +1,5 @@
+feature,detectRate_O1,medianOnset_O1,detectRate_O2,medianOnset_O2,medianOnset_O3
+rms,0.825,48,0.925,21,54
+mav,0.841666666666667,47,0.925,20.5,55.5
+mdf,0.408333333333333,79.5,0.625,54,59
+mnf,0.45,88,0.4,95,53

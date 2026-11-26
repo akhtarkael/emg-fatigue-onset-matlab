@@ -1,0 +1,12 @@
+# Raw dataset is downloaded by downloadData.m and is not redistributed here.
+data/raw/
+data/*.zip
+
+# MATLAB editor backups and autosaves
+*.asv
+*.m~
+*.mlx~
+
+# OS files
+.DS_Store
+Thumbs.db

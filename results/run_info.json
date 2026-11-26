@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-26 21:00:23",
+  "matlabRelease": "26.2.0.3433840 (R2026b) Update 1",
+  "seed": 0,
+  "config": {
+    "fs": 200,
+    "band": [
+      20,
+      90
+    ],
+    "filtOrder": 4,
+    "applyNotch": false,
+    "notchFreq": 50,
+    "notchQ": 10,
+    "winSec": 2,
+    "overlap": 0.5,
+    "specBand": [
+      20,
+      90
+    ],
+    "baselineFrac": 0.1,
+    "smoothWin": 5,
+    "zThresh": 3,
+    "kConsec": 3,
+    "pctThresh": 0.1,
+    "earlyLateFrac": 0.2,
+    "seed": 0,
+    "featureNames": [
+      "rms",
+      "mav",
+      "mdf",
+      "mnf"
+    ],
+    "expectedSign": {
+      "rms": 1,
+      "mav": 1,
+      "mdf": -1,
+      "mnf": -1
+    },
+    "welchSeg": 200,
+    "welchOverlap": 100,
+    "nfft": 512
+  },
+  "nSubjects": 15,
+  "nChannels": 8,
+  "installedProducts": [
+    "MATLAB",
+    "MATLAB Copilot",
+    "MATLAB MCP Server Toolbox",
+    "Optimization Toolbox",
+    "Simulink",
+    "Vehicle Dynamics Blockset"
+  ],
+  "skippedFeatures": [
+    "wlr (Wavelet Toolbox not installed)",
+    "E8 early-vs-late SVM (fitcsvm unavailable; time-position labels are not independent fatigue labels)"
+  ],
+  "substitutes": [
+    "Butterworth design and zero-phase filtering implemented in base MATLAB",
+    "Welch PSD implemented with FFT (base MATLAB)",
+    "Spearman, Wilcoxon and Friedman implemented in base MATLAB",
+    "findchangepts replaced by a two-segment linear least-squares change point"
+  ]
+}
