@@ -1,6 +1,6 @@
 # Detecting Muscle Fatigue Onset from Surface EMG: A Comparative Study of Spectral and Time-Domain Features in MATLAB
 
-**MATLAB Success Story | Category: Biomedical Signal Processing**
+**Category: Biomedical Signal Processing**
 
 > Give the tool a multi-channel surface EMG recording of a sustained muscle effort. It cleans the signal, extracts spectral and time-domain fatigue indicators in sliding windows, and reports which indicator reveals the onset of fatigue earliest and most consistently, with every claim backed by a number and a figure produced by the code in this repository.
 
